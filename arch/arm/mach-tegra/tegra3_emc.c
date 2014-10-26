@@ -45,6 +45,8 @@ static bool emc_enable;
 #endif
 module_param(emc_enable, bool, 0644);
 
+u8 tegra_emc_bw_efficiency = 35;
+
 #define EMC_MIN_RATE_DDR3		25500000
 #define EMC_STATUS_UPDATE_TIMEOUT	100
 #define TEGRA_EMC_TABLE_MAX_SIZE 	16
@@ -888,8 +890,8 @@ static bool is_emc_bridge(void)
 		return false;
 
 	mv = tegra_dvfs_predict_millivolts(emc, rate);
-	if (IS_ERR_VALUE(mv) || (mv > TEGRA_EMC_BRIDGE_MVOLTS_MIN))
-		return false;
+//	if (IS_ERR_VALUE(mv) || (mv > TEGRA_EMC_BRIDGE_MVOLTS_MIN))
+//		return false;
 
 	if (clk_set_rate(bridge, rate))
 		return false;
@@ -1028,13 +1030,13 @@ void tegra_init_emc(const struct tegra_emc_table *table, int table_size)
 
 	adjust_emc_dvfs_table(tegra_emc_table, tegra_emc_table_size);
 	mv = tegra_dvfs_predict_millivolts(emc, max_rate * 1000);
-	if ((mv <= 0) || (mv > emc->dvfs->max_millivolts)) {
-		tegra_emc_table = NULL;
-		pr_err("tegra: invalid EMC DFS table: maximum rate %lu kHz does"
-		       " not match nominal voltage %d\n",
-		       max_rate, emc->dvfs->max_millivolts);
-		return;
-	}
+//	if ((mv <= 0) || (mv > emc->dvfs->max_millivolts)) {
+//		tegra_emc_table = NULL;
+//		pr_err("tegra: invalid EMC DFS table: maximum rate %lu kHz does"
+//		       " not match nominal voltage %d\n",
+//		       max_rate, emc->dvfs->max_millivolts);
+//		return;
+//	}
 
 	if (!is_emc_bridge()) {
 		tegra_emc_table = NULL;
@@ -1273,6 +1275,22 @@ static int eack_state_set(void *data, u64 val)
 DEFINE_SIMPLE_ATTRIBUTE(eack_state_fops, eack_state_get,
 			eack_state_set, "%llu\n");
 
+static int efficiency_get(void *data, u64 *val)
+{
+	*val = tegra_emc_bw_efficiency;
+	return 0;
+}
+static int efficiency_set(void *data, u64 val)
+{
+	tegra_emc_bw_efficiency = (val > 100) ? 100 : val;
+	if (emc)
+		tegra_clk_shared_bus_update(emc);
+
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(efficiency_fops, efficiency_get,
+			efficiency_set, "%llu\n");
+
 static int __init tegra_emc_debug_init(void)
 {
 	if (!tegra_emc_table)
@@ -1296,6 +1314,10 @@ static int __init tegra_emc_debug_init(void)
 
 	if (!debugfs_create_file(
 		"eack_state", S_IRUGO | S_IWUSR, emc_debugfs_root, NULL, &eack_state_fops))
+		goto err_out;
+
+	if (!debugfs_create_file("efficiency", S_IRUGO | S_IWUSR,
+				 emc_debugfs_root, NULL, &efficiency_fops))
 		goto err_out;
 
 	return 0;

@@ -39,6 +39,14 @@
 #include "gpio-names.h"
 #include <mach/board-grouper-misc.h>
 
+#include <linux/module.h>
+static bool otf_scaling = 0;
+module_param(otf_scaling, bool, 0644);
+static unsigned int min_backlight = 10;
+module_param(min_backlight, uint, 0644);
+static unsigned int max_backlight = 255;
+module_param(max_backlight, uint, 0644);
+
 /* grouper default display board pins */
 #define grouper_lvds_avdd_en		TEGRA_GPIO_PH6
 #define grouper_lvds_rst			TEGRA_GPIO_PG7
@@ -66,7 +74,7 @@ static struct regulator *grouper_lvds_reg;
 static struct regulator *grouper_lvds_vdd_panel;
 
 static tegra_dc_bl_output grouper_bl_output_measured = {
-	0, 13, 13, 13, 13, 13, 13, 13,
+	0, 2, 4, 6, 9, 13, 13, 13,
 	13, 13, 13, 13, 13, 13, 14, 15,
 	16, 17, 18, 19, 20, 21, 22, 23,
 	24, 25, 26, 27, 28, 29, 30, 31,
@@ -151,11 +159,38 @@ static int grouper_backlight_notify(struct device *unused, int brightness)
 	brightness = (brightness * cur_sd_brightness) / 255;
 
 	/* Apply any backlight response curve */
-	if (brightness > 255)
+	if (brightness > 255) {
 		pr_info("Error: Brightness > 255!\n");
-	else
-		brightness = bl_output[brightness];
-
+	} else {
+#ifdef CONFIG_CUSTOM_BRIGHTNESS
+		if ((min_backlight == 0) || (max_backlight == 0)) {
+#endif
+			brightness = bl_output[brightness];
+#ifdef CONFIG_CUSTOM_BRIGHTNESS
+		} else {
+			if (otf_scaling == 0) {
+				int min_bl_adj = min_backlight;
+				/* Ensure that min backlight goes up to at least 10 to prevent auto-min != slider-min */
+				if (min_backlight < 11)
+					min_bl_adj = 11;
+				if ((brightness > 0) && (brightness < min_bl_adj)) {
+					brightness = min_backlight;
+				} else if (brightness > max_backlight) {
+					brightness = max_backlight;
+				} else {
+					brightness = bl_output[brightness];
+				}
+			} else {
+				if (brightness == 0) {
+					brightness = 0;
+				} else {
+					brightness = min_backlight + 
+					   DIV_ROUND_CLOSEST(((max_backlight - min_backlight) * max((brightness - 10),0)),245);
+				}
+			}
+		}
+#endif
+	}
 	return brightness;
 }
 
@@ -411,7 +446,17 @@ static struct tegra_dc_sd_settings grouper_sd_settings = {
 	.bin_width = -1,
 	.aggressiveness = 1,
 	.phase_in_adjustments = true,
-	.panel_min_brightness = 13,
+	.panel_min_brightness = 10,
+#ifdef CONFIG_TEGRA_SD_GEN2
+	.k_limit_enable = true,
+	.k_limit = 180,
+	.sd_window_enable = false,
+	.soft_clipping_enable = true,
+	/* Low soft clipping threshold to compensate for aggressive k_limit */
+	.soft_clipping_threshold = 128,
+	.smooth_k_enable = true,
+	.smooth_k_incr = 4,
+#endif
 	.use_vid_luma = false,
 	/* Default video coefficients */
 	.coeff = {5, 9, 2},

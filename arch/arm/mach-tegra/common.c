@@ -103,7 +103,7 @@ static struct board_info pmu_board_info;
 static struct board_info display_board_info;
 static struct board_info camera_board_info;
 
-static int pmu_core_edp = 1200;	/* default 1.2V EDP limit */
+static int pmu_core_edp = 1700;	/* default 1.2V EDP limit */
 static int board_panel_type;
 static enum power_supply_type pow_supply_type = POWER_SUPPLY_TYPE_MAINS;
 
@@ -172,7 +172,7 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "pll_p_out2",	"pll_p",	48000000,	false },
 	{ "pll_p_out3",	"pll_p",	72000000,	true },
 	{ "pll_p_out4",	"pll_p",	108000000,	false },
-	{ "pll_m",	"clk_m",	0,		true },
+	{ "pll_m",	"pll_ref",	0,		true },
 	{ "pll_m_out1",	"pll_m",	120000000,	true },
 	{ "sclk",	"pll_c_out1",	40000000,	true },
 	{ "hclk",	"sclk",		40000000,	true },
@@ -961,13 +961,20 @@ void __init tegra_ram_console_debug_reserve(unsigned long ram_console_size)
 {
 	struct resource *res;
 	long ret;
+	unsigned long real_start, real_size;
 
 	res = platform_get_resource(&ram_console_device, IORESOURCE_MEM, 0);
 	if (!res)
 		goto fail;
+
 	res->start = memblock_end_of_DRAM() - ram_console_size;
 	res->end = res->start + ram_console_size - 1;
-	ret = memblock_remove(res->start, ram_console_size);
+
+	// Register an extra 1M before ramconsole to store kexec stuff
+	real_start = res->start - SZ_1M;
+	real_size = ram_console_size + SZ_1M;
+
+	ret = memblock_remove(real_start, real_size);
 	if (ret)
 		goto fail;
 

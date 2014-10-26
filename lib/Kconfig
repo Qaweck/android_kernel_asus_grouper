@@ -106,6 +106,15 @@ config LZO_COMPRESS
 config LZO_DECOMPRESS
 	tristate
 
+config LZ4_COMPRESS
+	tristate
+
+config LZ4HC_COMPRESS
+	tristate
+
+config LZ4_DECOMPRESS
+	tristate
+
 source "lib/xz/Kconfig"
 
 #
@@ -128,6 +137,10 @@ config DECOMPRESS_XZ
 
 config DECOMPRESS_LZO
 	select LZO_DECOMPRESS
+	tristate
+
+config DECOMPRESS_LZ4
+	select LZ4_DECOMPRESS
 	tristate
 
 #
@@ -275,8 +288,5 @@ config CORDIC
 	  The option provides arithmetic function using cordic algorithm
 	  so its calculations are in fixed point. Modules can select this
 	  when they require this function. Module will be called cordic.
-
-config LLIST
-	bool
 
 endmenu

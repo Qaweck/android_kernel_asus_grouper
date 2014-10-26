@@ -525,12 +525,10 @@ unsigned long clk_get_rate_all_locked(struct clk *c)
 	return rate;
 }
 
-long clk_round_rate(struct clk *c, unsigned long rate)
+long clk_round_rate_locked(struct clk *c, unsigned long rate)
 {
-	unsigned long flags, max_rate;
+	unsigned long max_rate;
 	long ret;
-
-	clk_lock_save(c, &flags);
 
 	if (!c->ops || !c->ops->round_rate) {
 		ret = -ENOSYS;
@@ -544,6 +542,16 @@ long clk_round_rate(struct clk *c, unsigned long rate)
 	ret = c->ops->round_rate(c, rate);
 
 out:
+	return ret;
+}
+
+long clk_round_rate(struct clk *c, unsigned long rate)
+{
+	unsigned long flags;
+	long ret;
+
+	clk_lock_save(c, &flags);
+	ret = clk_round_rate_locked(c, rate);
 	clk_unlock_restore(c, &flags);
 	return ret;
 }
@@ -684,7 +692,10 @@ void __init tegra_init_max_rate(struct clk *c, unsigned long max_rate)
 
 	pr_warning("Lowering %s maximum rate from %lu to %lu\n",
 		c->name, c->max_rate, max_rate);
-
+	if(!strncmp(c->name,"cpu_g",strlen("cpu_g"))){
+		pr_warning("Keep max_rate of %s  as %lu \n",c->name, c->max_rate);
+		return;
+	}
 	c->max_rate = max_rate;
 	list_for_each_entry(shared_bus_user,
 			    &c->shared_bus_list, u.shared_bus_user.node) {
